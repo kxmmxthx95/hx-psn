@@ -1022,9 +1022,6 @@ function CreateUserSheet({ open, onClose }: { open: boolean; onClose: () => void
     if (draft.loginId.replace(/\D/g, "").length !== 10) e.loginId = "เบอร์โทรต้องเป็นตัวเลข 10 หลัก";
     if (!draft.first_name.trim()) e.first_name = "กรอกชื่อ";
     if (!draft.last_name.trim()) e.last_name = "กรอกนามสกุล";
-    if ((draft.national_id ?? "").replace(/\D/g, "").length !== 13) {
-      e.national_id = "เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก";
-    }
     if (!draft.date_of_birth) e.date_of_birth = "เลือกวันเดือนปีเกิดให้ครบ";
     if (!role) e.role = "เลือกสิทธิ์";
     if (role === "teacher" && !draft.learning_area_id) e.learning_area_id = "เลือกกลุ่มสาระ";

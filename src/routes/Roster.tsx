@@ -202,7 +202,7 @@ export function splitLoginEligibility(students: Student[]): { ready: Student[]; 
   const skipped: Student[] = [];
   for (const s of students) {
     if (s.profile_id) continue;
-    if (s.national_id && /^\d{13}$/.test(s.national_id)) ready.push(s);
+    if (s.national_id) ready.push(s);
     else skipped.push(s);
   }
   return { ready, skipped };
@@ -1414,10 +1414,6 @@ function CreateStudentLoginSheet({
     if (!student || !current) return;
     setFailReason(null);
     const nationalId = current.national_id.replace(/\D/g, "");
-    if (nationalId.length !== 13) {
-      setFailReason("เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก");
-      return;
-    }
 
     const payload: UserInvite = {
       kind: "student",

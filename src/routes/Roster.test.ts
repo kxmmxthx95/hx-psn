@@ -46,9 +46,9 @@ describe("splitLoginEligibility", () => {
     expect(splitLoginEligibility([s])).toEqual({ ready: [], skipped: [s] });
   });
 
-  it("skips a student with a malformed national ID", () => {
+  it("accepts a student with a short national ID", () => {
     const s = student({ id: "s3", national_id: "123" });
-    expect(splitLoginEligibility([s])).toEqual({ ready: [], skipped: [s] });
+    expect(splitLoginEligibility([s])).toEqual({ ready: [s], skipped: [] });
   });
 
   it("excludes a student who already has an account, even without skipping them", () => {
