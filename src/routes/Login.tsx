@@ -3,7 +3,7 @@ import { lazy, Suspense, useState } from "react";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button, BuddhistDateSelect, Field, Input, PasswordInput, Spinner } from "@/components/ui";
 
-const Beams = lazy(() => import("@/components/Beams/Beams"));
+const Silk = lazy(() => import("@/components/Silk/Silk"));
 
 type Mode = "signin" | "reset";
 
@@ -63,16 +63,7 @@ export function Login() {
     <div className="dark relative flex h-dvh flex-col overflow-hidden overscroll-none bg-black">
       <div className="pointer-events-none absolute inset-0" aria-hidden>
         <Suspense fallback={null}>
-          <Beams
-            beamWidth={2.2}
-            beamHeight={18}
-            beamNumber={14}
-            lightColor="#ffffff"
-            speed={1.6}
-            noiseIntensity={1.6}
-            scale={0.18}
-            rotation={28}
-          />
+          <Silk speed={5} scale={1} color="#7B7481" noiseIntensity={1.5} rotation={0} />
         </Suspense>
       </div>
 
