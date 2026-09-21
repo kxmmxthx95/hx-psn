@@ -108,7 +108,7 @@ export function TeachingLoad() {
   );
 }
 
-function loadStatus(total: number, min: number | null, max: number | null): "low" | "high" | "ok" {
+export function loadStatus(total: number, min: number | null, max: number | null): "low" | "high" | "ok" {
   if (min !== null && total < min) return "low";
   if (max !== null && total > max) return "high";
   return "ok";

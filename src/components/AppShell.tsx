@@ -405,8 +405,8 @@ function AppShellInner() {
   const avatarSrc = profile ? avatarUrl(profile) : null;
   const maySeeSettings = !!profile && (isOrgWide(profile.roles) || profile.roles.includes("dept_head"));
   const { data: schoolSettings } = useSchoolSettings();
-  // Student homepage is deliberately blank (see Dashboard.tsx) — no title text, no header divider there.
-  const isStudentHome = !!profile && profile.roles.includes("student") && location.pathname === "/";
+  // Dashboard (Dashboard.tsx) is deliberately blank — no title text, no header divider there.
+  const isHome = location.pathname === "/";
 
   const pickAvatar = () => avatarFileRef.current?.click();
   const onAvatarChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -711,13 +711,13 @@ function AppShellInner() {
         <header
           className={cn(
             "glass sticky top-0 z-20 shrink-0 pt-safe lg:hidden",
-            !isStudentHome && "border-b border-border",
+            !isHome && "border-b border-border",
           )}
         >
           {/* Title stays leading (after menu) — never centered under the Dynamic Island */}
           <div className="flex h-12 items-center gap-2 px-shell">
             {menuButton}
-            {!isStudentHome && (
+            {!isHome && (
               <p className="font-heading min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
                 {pageTitle}
               </p>
@@ -819,10 +819,10 @@ function AppShellInner() {
             <header
               className={cn(
                 "sticky top-0 z-20 hidden h-12 shrink-0 items-center bg-background dark:bg-muted lg:relative lg:flex",
-                !isStudentHome && "border-b border-border/60",
+                !isHome && "border-b border-border/60",
               )}
             >
-              {!isStudentHome && (
+              {!isHome && (
                 <p className="font-heading pointer-events-none absolute inset-x-0 truncate text-center text-sm font-semibold text-foreground">
                   {pageTitle}
                 </p>

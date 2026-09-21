@@ -147,6 +147,18 @@ export function useAttendanceRange(params: {
   });
 }
 
+/** Manager dashboard tile — today's student attendance, scoped by RLS (dept_head: own department, org-wide: whole school). */
+export function useDeptStudentAttendanceToday(date: string) {
+  return useQuery({
+    queryKey: ["attendance_records", "today_by_status", date],
+    queryFn: async (): Promise<Record<AttendanceStatus, number>> => {
+      const { data, error } = await supabase.from("attendance_records").select("status").eq("date", date);
+      if (error) throw error;
+      return summarizeAttendance(data);
+    },
+  });
+}
+
 export function summarizeAttendance(records: { status: AttendanceStatus }[]): Record<AttendanceStatus, number> {
   const counts: Record<AttendanceStatus, number> = { present: 0, late: 0, absent: 0, leave: 0 };
   for (const r of records) counts[r.status]++;

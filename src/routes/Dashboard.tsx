@@ -1,28 +1,36 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { Sheet } from "@/components/Sheet";
+import { Users } from "@/components/icons";
 import { Button, Field, Input, Skeleton, Spinner } from "@/components/ui";
 import { useToast } from "@/components/Toast";
+import { useActiveTerm } from "@/hooks/useAcademicTerms";
 import { assignmentStatus, useMyAssignments, useMyItemScores, useMySubmissions } from "@/hooks/useAssignments";
-import { summarizeAttendance, useAttendanceRange, useMyChildren } from "@/hooks/useAttendance";
+import {
+  summarizeAttendance,
+  useAttendanceRange,
+  useDeptStudentAttendanceToday,
+  useMyChildren,
+} from "@/hooks/useAttendance";
 import { STARTING_SCORE, summarizeBehaviorScore, useBehaviorRecords } from "@/hooks/useBehaviorRecords";
-import { useClockIn, useClockOut, useMyTimeClock } from "@/hooks/useTimeClock";
+import { useLeaveApprovals } from "@/hooks/useLeave";
+import { useDepartments } from "@/hooks/useProfiles";
+import { useDepartmentSettings, useSchoolSettings } from "@/hooks/useSettings";
+import { useStaffAttendanceRange } from "@/hooks/useStaffAttendance";
 import {
   useCancelStudentLeaveRequest,
+  usePendingStudentLeaveApprovals,
   useRequestStudentLeave,
   useStudentLeaveRequests,
 } from "@/hooks/useStudentLeave";
-import { useSchoolSettings } from "@/hooks/useSettings";
-import {
-  profileFullName,
-  type AttendanceStatus,
-  type StudentLeaveStatus,
-  type Student,
-} from "@/lib/database.types";
-import { roleLabels } from "@/lib/roles";
+import { useClockIn, useClockOut, useMyTimeClock } from "@/hooks/useTimeClock";
+import { useDepartmentTeachingAssignments } from "@/hooks/useTeachingLoad";
+import { type AttendanceStatus, type Profile, type StudentLeaveStatus, type Student } from "@/lib/database.types";
+import { canManageAcademic } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import { STATUS_LABEL } from "@/routes/Attendance";
+import { loadStatus } from "@/routes/TeachingLoad";
 import { bangkokTime } from "@/routes/TimeTracking";
 
 const LEAVE_STATUS_LABEL: Record<StudentLeaveStatus, string> = {
@@ -54,13 +62,6 @@ function currentAcademicYearRange() {
   return { start: `${now.getFullYear()}-01-01`, end: `${now.getFullYear()}-12-31` };
 }
 
-function greeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return "สวัสดีตอนเช้า";
-  if (hour < 17) return "สวัสดีตอนบ่าย";
-  return "สวัสดีตอนเย็น";
-}
-
 export function Dashboard() {
   const { profile, myStudent } = useAuth();
   const isParent = profile?.roles.includes("parent") ?? false;
@@ -70,40 +71,243 @@ export function Dashboard() {
     !!profile && profile.roles.some((r) => schoolSettings?.time_tracking_roles.includes(r));
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <div>
-        <p className="font-heading text-2xl font-semibold">
-          {greeting()}{profile && `, ${profileFullName(profile)}`}
-        </p>
-        {profile && <p className="text-sm text-muted-foreground">{roleLabels(profile.roles)}</p>}
+    <div className="space-y-6">
+      {profile && canManageAcademic(profile.roles) && (
+        <div className="mx-auto max-w-6xl">
+          <ManagerOverviewSection profile={profile} />
+        </div>
+      )}
+
+      <div className="mx-auto max-w-xl space-y-6">
+        {showClockWidget && profile && (
+          <QuickClockSection profileId={profile.id} departmentId={profile.department_id} />
+        )}
+
+        {myStudent && profile && <StudentLeaveSection student={myStudent} submittedBy={profile.id} />}
+        {children.map(
+          (child) => profile && <StudentLeaveSection key={child.id} student={child} submittedBy={profile.id} />,
+        )}
+
+        {myStudent && <AssignmentSummarySection student={myStudent} />}
+        {children.map((child) => (
+          <AssignmentSummarySection key={child.id} student={child} />
+        ))}
+        {myStudent && <AttendanceSummarySection student={myStudent} />}
+        {children.map((child) => (
+          <AttendanceSummarySection key={child.id} student={child} />
+        ))}
+        {myStudent && <BehaviorScoreSection student={myStudent} />}
+        {children.map((child) => (
+          <BehaviorScoreSection key={child.id} student={child} />
+        ))}
       </div>
-
-      {showClockWidget && profile && (
-        <QuickClockSection profileId={profile.id} departmentId={profile.department_id} />
-      )}
-
-      {myStudent && profile && <StudentLeaveSection student={myStudent} submittedBy={profile.id} />}
-      {children.map(
-        (child) => profile && <StudentLeaveSection key={child.id} student={child} submittedBy={profile.id} />,
-      )}
-
-      {myStudent && <AssignmentSummarySection student={myStudent} />}
-      {children.map((child) => (
-        <AssignmentSummarySection key={child.id} student={child} />
-      ))}
-      {myStudent && <AttendanceSummarySection student={myStudent} />}
-      {children.map((child) => (
-        <AttendanceSummarySection key={child.id} student={child} />
-      ))}
-      {myStudent && <BehaviorScoreSection student={myStudent} />}
-      {children.map((child) => (
-        <BehaviorScoreSection key={child.id} student={child} />
-      ))}
     </div>
   );
 }
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+
+/** dept_head/director/super_admin only — see canManageAcademic. dept_head scopes to own department, org-wide sees the whole school, both via RLS on the underlying tables. */
+function ManagerOverviewSection({ profile }: { profile: Profile }) {
+  const navigate = useNavigate();
+  const date = todayIso();
+
+  const { data: studentAttendance, isLoading: studentAttendanceLoading } = useDeptStudentAttendanceToday(date);
+  const { data: staffAttendance = [], isLoading: staffAttendanceLoading } = useStaffAttendanceRange(date, date);
+  const { data: pendingStudentLeave = [], isLoading: studentLeaveLoading } = usePendingStudentLeaveApprovals();
+  const { data: pendingStaffLeave = [], isLoading: staffLeaveLoading } = useLeaveApprovals("pending");
+
+  const departmentId = profile.department_id;
+  const { data: departments = [] } = useDepartments();
+  const splitsByTerm = departments.find((d) => d.id === departmentId)?.code === "SEC";
+  const { data: activeTerm } = useActiveTerm(departmentId);
+  const academicYear = activeTerm?.academic_year ?? new Date().getFullYear() + 543;
+  const term = splitsByTerm ? (activeTerm?.term_type === "term2" ? 2 : 1) : null;
+  const { data: deptSettings } = useDepartmentSettings(departmentId);
+  const { data: assignments, isLoading: teachingLoadLoading } = useDepartmentTeachingAssignments(
+    departmentId,
+    academicYear,
+    term,
+  );
+
+  const staffAttendanceCounts = summarizeAttendance(staffAttendance);
+
+  let outOfRangeTeachers: number | undefined;
+  if (assignments) {
+    const totals = new Map<string, number>();
+    for (const a of assignments) totals.set(a.teacher_id, (totals.get(a.teacher_id) ?? 0) + a.periods_per_week);
+    outOfRangeTeachers = [...totals.values()].filter(
+      (total) => loadStatus(total, deptSettings?.min_periods_per_week ?? null, deptSettings?.max_periods_per_week ?? null) !== "ok",
+    ).length;
+  }
+
+  const total = studentAttendance
+    ? studentAttendance.present + studentAttendance.late + studentAttendance.absent + studentAttendance.leave
+    : 0;
+  const presentRate = total > 0 ? Math.round(((studentAttendance!.present + studentAttendance!.late) / total) * 100) : null;
+
+  return (
+    <section className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <FadeUp delay={0} className="lg:col-span-2">
+          <button
+            type="button"
+            onClick={() => navigate("/attendance")}
+            className="tappable block w-full rounded-3xl bg-foreground p-6 text-left text-background shadow-lg"
+          >
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-background/50">
+              อัตรามาเรียนวันนี้ · นักเรียน
+            </p>
+            {studentAttendanceLoading ? (
+              <Skeleton className="mt-3 h-9 w-24 bg-background/20" />
+            ) : (
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-4xl font-black tracking-tighter">
+                  {presentRate === null ? "—" : `${presentRate}%`}
+                </span>
+                <span className="text-xs font-medium text-background/60">มา + สาย จากทั้งหมด {total} คน</span>
+              </div>
+            )}
+            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-background/15">
+              <div
+                className="h-full rounded-full bg-background transition-[width]"
+                style={{ width: `${presentRate ?? 0}%` }}
+              />
+            </div>
+            {studentAttendance && (
+              <p className="mt-3 text-xs text-background/70">
+                มา <strong className="font-semibold text-background">{studentAttendance.present}</strong> · สาย{" "}
+                <strong className="font-semibold text-background">{studentAttendance.late}</strong> · ขาด{" "}
+                <strong className="font-semibold text-background">{studentAttendance.absent}</strong> · ลา{" "}
+                <strong className="font-semibold text-background">{studentAttendance.leave}</strong>
+              </p>
+            )}
+          </button>
+        </FadeUp>
+
+        <FadeUp delay={80}>
+          <button
+            type="button"
+            onClick={() => navigate("/staff-attendance")}
+            className="tappable flex h-full w-full flex-col justify-center gap-3 rounded-3xl border border-border bg-card p-6 text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-muted">
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <h4 className="font-bold">ครูมาทำงานวันนี้</h4>
+            </div>
+            {staffAttendanceLoading ? (
+              <Skeleton className="h-4 w-40" />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                มา <strong className="font-semibold text-foreground">{staffAttendanceCounts.present}</strong> · สาย{" "}
+                <strong className="font-semibold text-foreground">{staffAttendanceCounts.late}</strong> · ขาด{" "}
+                <strong className="font-semibold text-foreground">{staffAttendanceCounts.absent}</strong> · ลา{" "}
+                <strong className="font-semibold text-foreground">{staffAttendanceCounts.leave}</strong>
+              </p>
+            )}
+          </button>
+        </FadeUp>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <KpiTile
+          delay={160}
+          label="คำขอลานักเรียนค้าง"
+          value={pendingStudentLeave.length}
+          unit="รายการ"
+          loading={studentLeaveLoading}
+          warn={pendingStudentLeave.length > 0}
+          onClick={() => navigate("/attendance")}
+        />
+        <KpiTile
+          delay={220}
+          label="คำขอลาครู/บุคลากรค้าง"
+          value={pendingStaffLeave.length}
+          unit="รายการ"
+          loading={staffLeaveLoading}
+          warn={pendingStaffLeave.length > 0}
+          onClick={() => navigate("/leave")}
+        />
+        <KpiTile
+          delay={280}
+          label="ครูภาระงานเกิน/ต่ำเกณฑ์"
+          value={outOfRangeTeachers}
+          unit="คน"
+          loading={teachingLoadLoading}
+          warn={!!outOfRangeTeachers}
+          fallback="ดูภาระงานสอน"
+          onClick={() => navigate("/teaching-load")}
+        />
+      </div>
+    </section>
+  );
+}
+
+/** Fades + rises in once on mount — no scroll-trigger, the dashboard is already in view when this renders. */
+function FadeUp({ delay, className, children }: { delay: number; className?: string; children: ReactNode }) {
+  return (
+    <div
+      className={cn("animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-500", className)}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function KpiTile({
+  delay,
+  label,
+  value,
+  unit,
+  loading,
+  warn,
+  fallback,
+  onClick,
+}: {
+  delay: number;
+  label: string;
+  value: number | undefined;
+  unit: string;
+  loading: boolean;
+  warn: boolean;
+  fallback?: string;
+  onClick: () => void;
+}) {
+  return (
+    <FadeUp delay={delay}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "tappable w-full rounded-2xl border bg-card p-5 text-left transition-colors",
+          warn ? "border-warning/40 hover:bg-warning/5" : "border-border hover:bg-muted",
+        )}
+      >
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
+        {loading ? (
+          <Skeleton className="mt-2 h-7 w-16" />
+        ) : value === undefined ? (
+          <p className="mt-2 text-sm text-accent underline">{fallback}</p>
+        ) : (
+          <div className="mt-1 flex items-baseline justify-between">
+            <span className="text-2xl font-black tracking-tighter">{value}</span>
+            <span
+              className={cn(
+                "rounded px-1.5 py-0.5 text-xs font-bold",
+                warn ? "bg-warning/15 text-warning" : "bg-success/15 text-success",
+              )}
+            >
+              {unit}
+            </span>
+          </div>
+        )}
+      </button>
+    </FadeUp>
+  );
+}
 
 /** Quick access to the full workspace at /time-tracking (history, ขอออกนอกโรงเรียน, approvals). */
 function QuickClockSection({ profileId, departmentId }: { profileId: string; departmentId: string | null }) {
