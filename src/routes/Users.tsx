@@ -890,13 +890,9 @@ function EditUserSheet({ profile, onClose }: { profile: ProfileRow | null; onClo
               onChange={(e) =>
                 setDraft({
                   ...current,
-                  national_id: e.target.value.replace(/\D/g, "").slice(0, 13) || null,
+                  national_id: e.target.value.replace(/\D/g, "") || null,
                 })
               }
-              pattern="[0-9]{13}"
-              minLength={13}
-              maxLength={13}
-              title="เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก"
             />
           </Field>
 
@@ -1179,7 +1175,7 @@ function CreateUserSheet({ open, onClose }: { open: boolean; onClose: () => void
           />
         </Field>
 
-        <Field label="เลขบัตรประชาชน (ใช้ยืนยันตอนลืมรหัสผ่าน)" error={errors.national_id} required>
+        <Field label="เลขบัตรประชาชน (ใช้ยืนยันตอนลืมรหัสผ่าน)" error={errors.national_id}>
           <Input
             inputMode="numeric"
             autoComplete="off"
@@ -1187,10 +1183,9 @@ function CreateUserSheet({ open, onClose }: { open: boolean; onClose: () => void
             onChange={(e) =>
               setDraft({
                 ...draft,
-                national_id: e.target.value.replace(/\D/g, "").slice(0, 13) || null,
+                national_id: e.target.value.replace(/\D/g, "") || null,
               })
             }
-            maxLength={13}
           />
         </Field>
 
