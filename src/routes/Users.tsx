@@ -40,7 +40,7 @@ import { profileFullName } from "@/lib/database.types";
 import { blobToBase64, compressImage } from "@/lib/image";
 import { passwordFromDob } from "@/lib/password";
 import { canManageUsers, isOrgWide, PREFIXES, ROLE_LABEL, ROLES, STUDENT_PREFIXES, roleLabels, type Role } from "@/lib/roles";
-import { AddressInputs, pickAddress } from "@/routes/Roster";
+import { pickAddress } from "@/routes/Roster";
 
 const EMPTY: ProfileFilters = { search: "", departmentId: "", role: "", active: "" };
 
@@ -903,8 +903,6 @@ function EditUserSheet({ profile, onClose }: { profile: ProfileRow | null; onClo
               onChange={(v) => setDraft({ ...current, date_of_birth: v || null })}
             />
           </Field>
-
-          <AddressInputs value={current} onChange={(patch) => setDraft({ ...current, ...patch })} />
 
           <RolePicker
             role={current.roles[0] ?? ""}
